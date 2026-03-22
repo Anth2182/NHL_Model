@@ -43,6 +43,14 @@ def main():
         AND season IN (2024, 2025)
     """
     games_df = pd.read_sql(query_games, engine)
+    numeric_cols = [
+        'goalsFor', 'goalsAgainst', 'xGoalsFor', 'xGoalsAgainst',
+        'corsiPercentage', 'shotsOnGoalFor', 'shotsOnGoalAgainst',
+        'scoreAdjustedShotsAttemptsFor', 'scoreAdjustedShotsAttemptsAgainst',
+        'highDangerxGoalsFor', 'highDangerxGoalsAgainst', 'season'
+    ]
+    for col in numeric_cols:
+        games_df[col] = pd.to_numeric(games_df[col], errors='coerce')
     prior_season   = games_df[games_df['season'] == 2024].copy()
     current_season = games_df[games_df['season'] == 2025].copy()
     print(f"  Prior season   (2024-25): {len(prior_season['gameId'].unique())} games")
@@ -55,6 +63,8 @@ def main():
         WHERE season = 2025
     """
     goalie_df = pd.read_sql(query_goalies, engine)
+    for col in ['games_played', 'xGoals', 'goals', 'season']:
+        goalie_df[col] = pd.to_numeric(goalie_df[col], errors='coerce')
     print(f"  Goalies loaded: {len(goalie_df[goalie_df['situation'] == 'all'])}")
 
     print("\nTraining model...")
