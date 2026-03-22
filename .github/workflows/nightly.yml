@@ -53,6 +53,16 @@ jobs:
           DB_PASS: ${{ secrets.DB_PASS }}
         run: python scripts/train_model.py
 
+      - name: Save predictions
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: python scripts/save_predictions.py
+
       - name: Commit updated model JSON
         run: |
           git config user.name  "github-actions[bot]"
