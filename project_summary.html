@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NHL Prediction Model — Project Summary</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, #1a1f2e 0%, #0d1117 100%);
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 40px;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #58a6ff;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+
+    .header p {
+      color: #8b949e;
+      font-size: 0.95rem;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 0.8rem;
+      color: #58a6ff;
+      margin-top: 12px;
+    }
+
+    /* Cards */
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 28px 32px;
+      margin-bottom: 24px;
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #58a6ff;
+      margin-bottom: 18px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #21262d;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card h2 .icon {
+      font-size: 1.1rem;
+    }
+
+    .card p {
+      color: #c9d1d9;
+      line-height: 1.7;
+      font-size: 0.93rem;
+    }
+
+    /* File list */
+    .file-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 4px;
+    }
+
+    .file-item {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+
+    .file-item .filename {
+      font-family: 'Courier New', monospace;
+      font-size: 0.82rem;
+      color: #79c0ff;
+      margin-bottom: 4px;
+    }
+
+    .file-item .desc {
+      font-size: 0.8rem;
+      color: #8b949e;
+      line-height: 1.4;
+    }
+
+    /* Workflow */
+    .workflow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .workflow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      position: relative;
+    }
+
+    .workflow-step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 19px;
+      top: 44px;
+      width: 2px;
+      height: calc(100% - 10px);
+      background: #21262d;
+    }
+
+    .step-number {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #1f6feb;
+      color: white;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      z-index: 1;
+    }
+
+    .step-content {
+      padding: 8px 0 24px 0;
+    }
+
+    .step-content h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #e6edf3;
+      margin-bottom: 4px;
+    }
+
+    .step-content p {
+      font-size: 0.85rem;
+      color: #8b949e;
+      line-height: 1.5;
+    }
+
+    .step-content code {
+      font-family: 'Courier New', monospace;
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 0.8rem;
+      color: #79c0ff;
+    }
+
+    /* Git section */
+    .git-flow {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .git-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 8px;
+      padding: 14px 18px;
+    }
+
+    .git-row .label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #58a6ff;
+      width: 130px;
+      flex-shrink: 0;
+    }
+
+    .git-row .detail {
+      font-size: 0.83rem;
+      color: #c9d1d9;
+      line-height: 1.4;
+    }
+
+    .git-row .detail code {
+      font-family: 'Courier New', monospace;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 0.78rem;
+      color: #79c0ff;
+    }
+
+    /* Model pills */
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .pill {
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 0.8rem;
+      color: #93c5fd;
+    }
+
+    /* Schedule box */
+    .schedule-box {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-left: 3px solid #1f6feb;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-top: 16px;
+    }
+
+    .schedule-box p {
+      font-size: 0.85rem;
+      color: #8b949e;
+    }
+
+    .schedule-box strong {
+      color: #58a6ff;
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      color: #484f58;
+      font-size: 0.8rem;
+      margin-top: 10px;
+      padding-top: 20px;
+      border-top: 1px solid #21262d;
+    }
+
+    @media print {
+      body { background: white; color: #0d1117; padding: 20px; }
+      .header { background: #f0f4ff; border-color: #c8d6ff; }
+      .header h1 { color: #1a56db; }
+      .card { background: #f8fafc; border-color: #e2e8f0; }
+      .card h2 { color: #1a56db; border-color: #e2e8f0; }
+      .file-item { background: #f0f4ff; border-color: #c8d6ff; }
+      .file-item .filename { color: #1a56db; }
+      .git-row { background: #f8fafc; border-color: #e2e8f0; }
+      .schedule-box { background: #f0f4ff; border-color: #c8d6ff; }
+      .step-number { background: #1a56db; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>NHL Prediction Model</h1>
+    <p>Skellam / Dixon-Coles Poisson Model — 2025–26 Season</p>
+    <div class="badge">github.com/Anth2182/NHL_Model</div>
+  </div>
+
+  <!-- Project Overview -->
+  <div class="card">
+    <h2><span class="icon">📋</span> Project Overview</h2>
+    <p>
+      A probabilistic NHL game prediction system that uses a Dixon-Coles Poisson model with Skellam
+      distribution to generate win probabilities, puck line coverage, and over/under probabilities
+      for every NHL game. The model blends prior season ratings, current season performance, and
+      advanced metrics (xGoals, high-danger chances, shots on goal) with goalie quality adjustments
+      based on Goals Saved Above Expected (GSAx).
+    </p>
+    <div class="pill-row">
+      <span class="pill">Dixon-Coles MLE</span>
+      <span class="pill">Skellam Distribution</span>
+      <span class="pill">xGoals / HDCF</span>
+      <span class="pill">GSAx Goalie Ratings</span>
+      <span class="pill">Back-to-Back Penalty</span>
+      <span class="pill">Rolling Backtest</span>
+    </div>
+  </div>
+
+  <!-- Key Files -->
+  <div class="card">
+    <h2><span class="icon">📁</span> Key Files</h2>
+    <div class="file-grid">
+      <div class="file-item">
+        <div class="filename">new poisson model.ipynb</div>
+        <div class="desc">Interactive notebook for training, backtesting, and daily edge finding</div>
+      </div>
+      <div class="file-item">
+        <div class="filename">nhl_model.py</div>
+        <div class="desc">Shared model library — imported by the Streamlit app and training scripts</div>
+      </div>
+      <div class="file-item">
+        <div class="filename">nhl_app.py</div>
+        <div class="desc">Streamlit web app for daily game predictions and edge finder</div>
+      </div>
+      <div class="file-item">
+        <div class="filename">nhl_skellam_model.json</div>
+        <div class="desc">Serialized trained model — team ratings, goalie adjustments, model parameters</div>
+      </div>
+      <div class="file-item">
+        <div class="filename">scripts/scrape_gamelogs.py</div>
+        <div class="desc">Fetches new game data from MoneyPuck and appends to Supabase</div>
+      </div>
+      <div class="file-item">
+        <div class="filename">scripts/scrape_goalies.py</div>
+        <div class="desc">Fetches current season goalie stats and replaces Supabase table</div>
+      </div>
+      <div class="file-item">
+        <div class="filename">scripts/train_model.py</div>
+        <div class="desc">Retrains the model from Supabase data and saves updated JSON</div>
+      </div>
+      <div class="file-item">
+        <div class="filename">nhl-202526-asplayed.csv</div>
+        <div class="desc">Schedule file with market odds used for edge calculations and backtesting</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nightly Workflow -->
+  <div class="card">
+    <h2><span class="icon">⚙️</span> Nightly Automated Workflow</h2>
+    <div class="workflow">
+      <div class="workflow-step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>Scrape Game Logs</h3>
+          <p>GitHub Actions runs <code>scrape_gamelogs.py</code>. Downloads the latest game-by-game data from MoneyPuck and appends any new games to the <code>NHL_Gamelog</code> table in Supabase.</p>
+        </div>
+      </div>
+      <div class="workflow-step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>Scrape Goalie Stats</h3>
+          <p>Runs <code>scrape_goalies.py</code>. Downloads current season goalie stats from MoneyPuck and replaces the <code>Goalie_stats</code> table in Supabase with fresh data.</p>
+        </div>
+      </div>
+      <div class="workflow-step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>Retrain the Model</h3>
+          <p>Runs <code>train_model.py</code>. Pulls all game and goalie data from Supabase, fits new Dixon-Coles attack/defense ratings via MLE, and saves the updated <code>nhl_skellam_model.json</code>.</p>
+        </div>
+      </div>
+      <div class="workflow-step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h3>Commit Updated Model</h3>
+          <p>GitHub Actions automatically commits the new <code>nhl_skellam_model.json</code> back to the repository so the latest model is always available.</p>
+        </div>
+      </div>
+    </div>
+    <div class="schedule-box">
+      <p><strong>Schedule:</strong> Runs every night at 11:00 PM EST automatically. No computer needs to be on — everything runs on GitHub's cloud servers. Can also be triggered manually from the GitHub Actions tab at any time.</p>
+    </div>
+  </div>
+
+  <!-- GitHub Setup -->
+  <div class="card">
+    <h2><span class="icon">🐙</span> GitHub Setup</h2>
+    <div class="git-flow">
+      <div class="git-row">
+        <div class="label">Repository</div>
+        <div class="detail"><code>github.com/Anth2182/NHL_Model</code> — Private repository</div>
+      </div>
+      <div class="git-row">
+        <div class="label">Branch</div>
+        <div class="detail"><code>main</code> — single branch, nightly automation commits model updates here</div>
+      </div>
+      <div class="git-row">
+        <div class="label">Credentials</div>
+        <div class="detail">Supabase credentials stored as <strong>GitHub Secrets</strong> — never committed to code. Accessed by Actions as environment variables at runtime.</div>
+      </div>
+      <div class="git-row">
+        <div class="label">Automation</div>
+        <div class="detail"><code>.github/workflows/nightly.yml</code> — cron schedule triggers scrape + train pipeline every night</div>
+      </div>
+      <div class="git-row">
+        <div class="label">Database</div>
+        <div class="detail">Supabase (PostgreSQL) — cloud hosted, accessible from GitHub Actions and local notebooks without VPN or local SQL Server</div>
+      </div>
+      <div class="git-row">
+        <div class="label">.gitignore</div>
+        <div class="detail"><code>.env</code> file excluded from commits — credentials stay local only</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    NHL Prediction Model &nbsp;·&nbsp; Anth2182 &nbsp;·&nbsp; 2025–26 Season
+  </div>
+
+</div>
+</body>
+</html>
