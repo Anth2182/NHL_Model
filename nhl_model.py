@@ -152,7 +152,7 @@ class DixonColesModel:
         avg_goals = home_games['goalsFor'].mean()
         x0 = np.zeros(n_params); x0[0] = np.log(max(avg_goals, 0.5)); x0[1] = 0.1; x0[2] = -0.1
         result = minimize(neg_log_likelihood, x0, method='L-BFGS-B',
-                          options={'maxiter': 300, 'ftol': 1e-7})
+                          options={'maxiter': 100, 'ftol': 1e-6, 'maxfun': 3000})
         log_mu, home_adv, rho, attack_arr, defense_arr = params_to_dict(result.x)
         self.log_mu = log_mu; self.home_adv = home_adv
         self.rho    = np.clip(rho, -0.99, 0.99)
