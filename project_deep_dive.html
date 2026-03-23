@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NHL Edge Finder — Deep Dive</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #1c2330;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --blue: #58a6ff;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --red: #f85149;
+      --purple: #bc8cff;
+      --teal: #39d0d8;
+      --orange: #f0883e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Layout */
+    .layout { display: flex; min-height: 100vh; }
+    nav {
+      width: 260px;
+      min-width: 260px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 24px 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    nav .logo {
+      padding: 0 20px 20px;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--blue);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+    nav ul { list-style: none; }
+    nav ul li a {
+      display: block;
+      padding: 6px 20px;
+      color: var(--muted);
+      font-size: 13px;
+      transition: color 0.15s, background 0.15s;
+    }
+    nav ul li a:hover { color: var(--text); background: var(--surface2); text-decoration: none; }
+    nav ul li.section-header {
+      padding: 14px 20px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    main {
+      flex: 1;
+      padding: 48px 56px;
+      max-width: 900px;
+    }
+
+    /* Typography */
+    h1 { font-size: 2rem; font-weight: 800; margin-bottom: 8px; color: var(--text); }
+    h2 { font-size: 1.4rem; font-weight: 700; margin: 48px 0 16px; color: var(--text); padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 1.1rem; font-weight: 600; margin: 28px 0 10px; color: var(--blue); }
+    h4 { font-size: 0.95rem; font-weight: 600; margin: 20px 0 8px; color: var(--orange); }
+    p  { margin-bottom: 14px; color: #cdd5df; }
+    ul, ol { padding-left: 22px; margin-bottom: 14px; color: #cdd5df; }
+    li { margin-bottom: 6px; }
+
+    /* Hero */
+    .hero {
+      background: linear-gradient(135deg, #1a2744 0%, #0d1f3c 100%);
+      border: 1px solid #2a4070;
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 40px;
+    }
+    .hero .subtitle { color: var(--muted); font-size: 14px; margin-top: 6px; margin-bottom: 0; }
+    .tag-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+    .tag {
+      background: #1f2d47;
+      border: 1px solid #2a4070;
+      border-radius: 20px;
+      padding: 3px 12px;
+      font-size: 12px;
+      color: var(--blue);
+    }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+    .card-grid .card { margin-bottom: 0; }
+    .card h4 { margin-top: 0; }
+
+    /* Code */
+    code {
+      background: #1c2330;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 13px;
+      color: var(--teal);
+    }
+    pre {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+      overflow-x: auto;
+      margin: 14px 0 20px;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    pre .c  { color: #6e7681; font-style: italic; }  /* comment */
+    pre .k  { color: #ff7b72; }   /* keyword */
+    pre .f  { color: #d2a8ff; }   /* function */
+    pre .s  { color: #a5d6ff; }   /* string */
+    pre .n  { color: #79c0ff; }   /* number */
+    pre .v  { color: var(--teal); } /* variable */
+    pre .p  { color: #e6edf3; }   /* punctuation */
+
+    /* Math blocks */
+    .math {
+      background: #0d1f3c;
+      border-left: 3px solid var(--blue);
+      border-radius: 0 8px 8px 0;
+      padding: 14px 20px;
+      margin: 14px 0 20px;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 14px;
+      color: #a5d6ff;
+      line-height: 1.8;
+    }
+
+    /* Callouts */
+    .callout {
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+    .callout.info    { background: #0d2136; border-left: 3px solid var(--blue);   }
+    .callout.success { background: #0d2218; border-left: 3px solid var(--green);  }
+    .callout.warn    { background: #1f1a0d; border-left: 3px solid var(--yellow); }
+    .callout.tip     { background: #1a0d2e; border-left: 3px solid var(--purple); }
+    .callout strong  { display: block; margin-bottom: 4px; }
+    .callout.info    strong { color: var(--blue);   }
+    .callout.success strong { color: var(--green);  }
+    .callout.warn    strong { color: var(--yellow); }
+    .callout.tip     strong { color: var(--purple); }
+
+    /* Flow diagram */
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex-wrap: wrap;
+      margin: 18px 0;
+    }
+    .flow-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .flow-arrow {
+      color: var(--muted);
+      font-size: 18px;
+      padding: 0 8px;
+    }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 24px;
+      font-size: 13px;
+    }
+    th {
+      background: var(--surface2);
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 11px;
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      color: #cdd5df;
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+
+    /* Weight meter */
+    .weight-bar {
+      display: inline-block;
+      height: 8px;
+      border-radius: 4px;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    .bar-blue   { background: var(--blue);   }
+    .bar-green  { background: var(--green);  }
+    .bar-orange { background: var(--orange); }
+
+    /* Section anchor offset */
+    section { scroll-margin-top: 24px; }
+
+    @media (max-width: 768px) {
+      nav { display: none; }
+      main { padding: 24px 20px; }
+      .card-grid { grid-template-columns: 1fr; }
+      .flow { flex-direction: column; align-items: flex-start; }
+      .flow-arrow { transform: rotate(90deg); }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ── Sidebar Nav ─────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="logo">🏒 NHL Edge Finder</div>
+  <ul>
+    <li class="section-header">Overview</li>
+    <li><a href="#overview">What is this project?</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#data-flow">Data Flow</a></li>
+
+    <li class="section-header">The Math</li>
+    <li><a href="#poisson">Poisson Distribution</a></li>
+    <li><a href="#dixon-coles">Dixon-Coles Model</a></li>
+    <li><a href="#time-weighting">Time Weighting (xi)</a></li>
+    <li><a href="#skellam">Score Matrix & Probabilities</a></li>
+    <li><a href="#blending">Blending Prior + Current</a></li>
+    <li><a href="#metrics">Current Season Metrics</a></li>
+    <li><a href="#goalies">Goalie Ratings (GSAx)</a></li>
+    <li><a href="#b2b">Back-to-Back Penalty</a></li>
+
+    <li class="section-header">Betting Math</li>
+    <li><a href="#american-odds">American Odds</a></li>
+    <li><a href="#vig">The Vig</a></li>
+    <li><a href="#edge">Edge Calculation</a></li>
+
+    <li class="section-header">The App</li>
+    <li><a href="#app-flow">App Flow</a></li>
+    <li><a href="#key-files">Key Files</a></li>
+    <li><a href="#improvements">Future Improvements</a></li>
+  </ul>
+</nav>
+
+<!-- ── Main Content ───────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- Hero -->
+  <section id="overview">
+    <div class="hero">
+      <h1>NHL Edge Finder</h1>
+      <p class="subtitle">A deep dive into how the model works, what the math means, and how it all fits together.</p>
+      <div class="tag-row">
+        <span class="tag">Python</span>
+        <span class="tag">Streamlit</span>
+        <span class="tag">Dixon-Coles</span>
+        <span class="tag">Poisson Model</span>
+        <span class="tag">Sports Betting</span>
+        <span class="tag">GSAx</span>
+      </div>
+    </div>
+
+    <h2>What is this project?</h2>
+    <p>
+      The NHL Edge Finder is a sports betting edge calculator. You give it the sportsbook's odds for an NHL game,
+      and it compares those odds against probabilities calculated by a statistical model built from historical game data.
+      The difference between what the model thinks the probability is and what the sportsbook is implying — that's the <strong>edge</strong>.
+    </p>
+    <p>
+      A positive edge means the model thinks you're getting a better price than the game is actually worth.
+      A negative edge means the sportsbook has priced that outcome more expensively than the model expects.
+    </p>
+    <div class="callout info">
+      <strong>The Core Idea</strong>
+      If your model says Team A wins 60% of the time, but the sportsbook's odds imply only 55%, you have a
+      +5% edge on Team A. Over a large sample, consistently finding and betting positive edges is how sharp bettors make money.
+    </div>
+  </section>
+
+  <!-- Architecture -->
+  <section id="architecture">
+    <h2>Architecture</h2>
+    <div class="card-grid">
+      <div class="card">
+        <h4>nhl_model.py</h4>
+        <p>The brain. Contains all the statistical model classes and math. Shared between the training notebook and the live app.</p>
+      </div>
+      <div class="card">
+        <h4>nhl_app.py</h4>
+        <p>The Streamlit frontend. Loads the trained model, lets you enter odds, and displays edge calculations.</p>
+      </div>
+      <div class="card">
+        <h4>nhl_skellam_model.json</h4>
+        <p>The saved trained model. Attack/defense ratings for all 32 teams plus goalie adjustments, serialized to JSON.</p>
+      </div>
+      <div class="card">
+        <h4>nhl-202526-asplayed.csv</h4>
+        <p>The schedule file. Used to auto-populate game matchups and detect back-to-back games.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Data Flow -->
+  <section id="data-flow">
+    <h2>Data Flow</h2>
+    <div class="flow">
+      <div class="flow-box">📦 Raw Game Data<br><small style="color:var(--muted);font-weight:400">NHL API / DB</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">🧮 Train Model<br><small style="color:var(--muted);font-weight:400">Jupyter Notebook</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">💾 Save JSON<br><small style="color:var(--muted);font-weight:400">nhl_skellam_model.json</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">🌐 Streamlit App<br><small style="color:var(--muted);font-weight:400">Load + Predict</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">📊 Edge Output<br><small style="color:var(--muted);font-weight:400">You place bets</small></div>
+    </div>
+    <p>
+      Training happens separately in the notebook. The app only ever <em>reads</em> the saved model — it never retrains.
+      This means predictions are fast and the app has no dependency on the database at runtime.
+    </p>
+  </section>
+
+  <!-- Poisson -->
+  <section id="poisson">
+    <h2>Poisson Distribution</h2>
+    <p>
+      The foundation of the entire model is the <strong>Poisson distribution</strong>. It answers the question:
+      <em>"If a team is expected to score λ goals on average, what's the probability they score exactly k goals?"</em>
+    </p>
+    <div class="math">
+P(k goals) = e<sup>−λ</sup> × λ<sup>k</sup> / k!
+    </div>
+    <p>
+      For example, if a team's expected goals (λ) is 3.0:
+    </p>
+    <table>
+      <thead><tr><th>Goals (k)</th><th>Probability</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>5.0%</td></tr>
+        <tr><td>1</td><td>14.9%</td></tr>
+        <tr><td>2</td><td>22.4%</td></tr>
+        <tr><td>3</td><td>22.4%</td></tr>
+        <tr><td>4</td><td>16.8%</td></tr>
+        <tr><td>5+</td><td>18.5%</td></tr>
+      </tbody>
+    </table>
+    <p>
+      The model calculates λ separately for the home team (<code>lam_h</code>) and away team (<code>lam_a</code>)
+      based on each team's attack strength, the opponent's defensive strength, and other adjustments.
+    </p>
+    <pre><code><span class="k">def</span> <span class="f">poisson_pmf</span><span class="p">(</span><span class="v">k</span><span class="p">, </span><span class="v">lam</span><span class="p">):</span>
+    <span class="k">return</span> np<span class="p">.</span><span class="f">exp</span><span class="p">(</span><span class="v">-lam</span><span class="p">) * (</span><span class="v">lam</span> <span class="p">**</span> <span class="v">k</span><span class="p">) /</span> <span class="f">factorial</span><span class="p">(</span><span class="v">k</span><span class="p">)</span></code></pre>
+  </section>
+
+  <!-- Dixon-Coles -->
+  <section id="dixon-coles">
+    <h2>Dixon-Coles Model</h2>
+    <p>
+      Pure Poisson has a flaw: it treats home and away goals as completely independent, but in real life
+      low-scoring games (0-0, 1-0, 0-1, 1-1) happen slightly more or less often than Poisson predicts.
+      <strong>Dixon-Coles</strong> adds a correction factor <code>ρ (rho)</code> to fix this.
+    </p>
+    <div class="math">
+dc_correction(gh, ga) =
+  if 0-0: 1 − λ_h × λ_a × ρ
+  if 1-0: 1 + λ_a × ρ
+  if 0-1: 1 + λ_h × ρ
+  if 1-1: 1 − ρ
+  else:   1.0  (no correction needed)
+    </div>
+    <p>
+      <code>ρ</code> is typically a small negative number (e.g. <code>-0.1</code>), meaning 0-0 draws
+      happen slightly less often than pure Poisson predicts in hockey — because teams tend to push for
+      goals when tied.
+    </p>
+
+    <h3>Attack & Defense Ratings</h3>
+    <p>
+      The expected goals for the home team in a given game are calculated as:
+    </p>
+    <div class="math">
+λ_home = exp( log_μ  +  home_advantage  +  attack[home]  −  defense[away] )
+λ_away = exp( log_μ                     +  attack[away]  −  defense[home] )
+    </div>
+    <p>
+      Everything is on a <strong>log scale</strong> so that the parameters can be added/subtracted cleanly
+      and then exponentiated to get a positive goal rate. Here's what each parameter means:
+    </p>
+    <table>
+      <thead><tr><th>Parameter</th><th>What it means</th><th>Typical value</th></tr></thead>
+      <tbody>
+        <tr><td><code>log_μ</code></td><td>The league-average log goals per game</td><td>~1.1 (≈ 3 goals)</td></tr>
+        <tr><td><code>home_adv</code></td><td>Boost for playing at home</td><td>~0.05–0.10</td></tr>
+        <tr><td><code>attack[team]</code></td><td>How much better/worse than average at scoring</td><td>−0.3 to +0.3</td></tr>
+        <tr><td><code>defense[team]</code></td><td>How much better/worse than average at preventing goals</td><td>−0.3 to +0.3</td></tr>
+      </tbody>
+    </table>
+
+    <h3>How the model is trained</h3>
+    <p>
+      The model finds the attack/defense values that make the observed scores most likely — this is called
+      <strong>Maximum Likelihood Estimation (MLE)</strong>. It uses <code>scipy.optimize.minimize</code>
+      with L-BFGS-B to find the parameters that minimize the negative log-likelihood across all games.
+    </p>
+    <div class="callout tip">
+      <strong>Why log scale?</strong>
+      Using log ratings means a team's attack and the opponent's defense are simply added/subtracted.
+      Without the log, you'd need to multiply fractions, which is harder to optimize and can produce negative goal rates.
+    </div>
+  </section>
+
+  <!-- Time Weighting -->
+  <section id="time-weighting">
+    <h2>Time Weighting (xi)</h2>
+    <p>
+      A game from 3 years ago should matter less than a game from last week. The model applies
+      exponential decay weighting to each game based on how many days ago it was played.
+    </p>
+    <div class="math">
+weight = e<sup>−ξ × days_ago</sup>
+    </div>
+    <p>
+      The parameter <code>xi = 0.005</code> controls how fast old games decay in importance.
+      With ξ = 0.005, a game from 200 days ago gets a weight of <code>e^(-0.005 × 200) = 0.37</code>
+      — about 37% as much influence as a game played today.
+    </p>
+    <table>
+      <thead><tr><th>Days ago</th><th>Weight</th><th>Intuition</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>1.00</td><td>Full weight — today's game</td></tr>
+        <tr><td>30</td><td>0.86</td><td>Last month</td></tr>
+        <tr><td>90</td><td>0.64</td><td>3 months ago</td></tr>
+        <tr><td>200</td><td>0.37</td><td>~7 months ago</td></tr>
+        <tr><td>365</td><td>0.16</td><td>Last season</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- Score Matrix / Skellam -->
+  <section id="skellam">
+    <h2>Score Matrix & Win Probabilities</h2>
+    <p>
+      Once we have <code>lam_h</code> and <code>lam_a</code>, the model builds a full
+      <strong>score matrix</strong> — a 16×16 grid where each cell <code>[gh][ga]</code> holds the
+      probability of the home team scoring <code>gh</code> goals and the away team scoring <code>ga</code> goals.
+    </p>
+    <div class="math">
+P(gh, ga) = Poisson(gh, λ_h) × Poisson(ga, λ_a) × dc_correction(gh, ga)
+    </div>
+    <p>
+      From this matrix, every outcome can be computed by simply summing the right cells:
+    </p>
+    <table>
+      <thead><tr><th>Outcome</th><th>Which cells</th></tr></thead>
+      <tbody>
+        <tr><td>Home win (regulation)</td><td>All cells where gh &gt; ga</td></tr>
+        <tr><td>Away win (regulation)</td><td>All cells where ga &gt; gh</td></tr>
+        <tr><td>Draw / OT</td><td>Diagonal cells where gh == ga</td></tr>
+        <tr><td>Home win (incl. OT)</td><td>Home reg wins + 50% of draws</td></tr>
+        <tr><td>Home covers -1.5</td><td>All cells where gh − ga ≥ 2</td></tr>
+        <tr><td>Over X.5 goals</td><td>All cells where gh + ga &gt; X.5</td></tr>
+      </tbody>
+    </table>
+    <div class="callout info">
+      <strong>Why 50% of draws?</strong>
+      When the model says "OT", it doesn't know who wins — hockey overtime is essentially a coin flip
+      (actually slightly home-favored, but 50/50 is a reasonable approximation).
+      So each draw cell contributes 50% to home win probability and 50% to away win probability.
+    </div>
+    <div class="callout warn">
+      <strong>Totals and the "push"</strong>
+      For over/under bets, the model separates out push probability (exact total = the line) and
+      calculates <code>over_fair</code> and <code>under_fair</code> by normalizing only over the
+      non-push outcomes. This matches how sportsbooks settle totals.
+    </div>
+  </section>
+
+  <!-- Blending -->
+  <section id="blending">
+    <h2>Blending Prior + Current Season</h2>
+    <p>
+      One of the smartest parts of this model is how it handles the <strong>small sample size problem</strong>
+      early in the season. After 5 games you don't have enough data to trust current season ratings,
+      so the model blends in prior season data.
+    </p>
+    <p>The final team rating is a weighted blend of three sources:</p>
+
+    <table>
+      <thead><tr><th>Source</th><th>What it is</th><th>Weight (varies by games played)</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="weight-bar bar-blue" style="width:60px"></span> Prior DC</td>
+          <td>Full prior season Dixon-Coles ratings</td>
+          <td>80% early → 0% after 30 games</td>
+        </tr>
+        <tr>
+          <td><span class="weight-bar bar-green" style="width:60px"></span> Current DC</td>
+          <td>Current season Dixon-Coles ratings</td>
+          <td>Grows from 0% → up to 40%</td>
+        </tr>
+        <tr>
+          <td><span class="weight-bar bar-orange" style="width:60px"></span> Current Metrics</td>
+          <td>xG, high-danger chances, shots (current season)</td>
+          <td>Heavy early, then ~60% after 40 games</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <pre><code><span class="c"># Weight schedule based on current season games played</span>
+<span class="k">if</span>   <span class="v">g</span> <span class="p">&lt;</span> <span class="n">10</span><span class="p">:  </span><span class="v">prior_w</span> <span class="p">=</span> <span class="n">0.80</span>
+<span class="k">elif</span> <span class="v">g</span> <span class="p">&lt;</span> <span class="n">20</span><span class="p">:  </span><span class="v">prior_w</span> <span class="p">=</span> <span class="n">0.50</span>
+<span class="k">elif</span> <span class="v">g</span> <span class="p">&lt;</span> <span class="n">30</span><span class="p">:  </span><span class="v">prior_w</span> <span class="p">=</span> <span class="n">0.20</span>
+<span class="k">else</span><span class="p">:         </span><span class="v">prior_w</span> <span class="p">=</span> <span class="n">0.00</span></code></pre>
+
+    <div class="callout success">
+      <strong>Why this is clever</strong>
+      Pure current-season models blow up in October because 5 games of data is noise, not signal.
+      By leaning on last year's ratings early and gradually transitioning, the model stays stable
+      all season long.
+    </div>
+  </section>
+
+  <!-- Current Season Metrics -->
+  <section id="metrics">
+    <h2>Current Season Metrics</h2>
+    <p>
+      Beyond win-loss ratings, the model tracks three underlying performance metrics per team
+      and converts them into attack/defense adjustments using <strong>z-scores</strong>.
+    </p>
+    <table>
+      <thead><tr><th>Metric</th><th>Weight</th><th>What it measures</th></tr></thead>
+      <tbody>
+        <tr><td>xGoals For/Against per game</td><td>50%</td><td>Expected goals based on shot quality — the gold standard of possession metrics</td></tr>
+        <tr><td>High-Danger xGoals per game</td><td>30%</td><td>xG from the most dangerous scoring zones (slot, crease)</td></tr>
+        <tr><td>Shots on Goal per game</td><td>20%</td><td>Raw shot volume</td></tr>
+      </tbody>
+    </table>
+    <div class="math">
+attack_adjustment = 0.50×z(xGF/gp) + 0.30×z(HD_xGF/gp) + 0.20×z(SOG/gp)
+
+defense_adjustment = 0.50×z(xGA/gp) + 0.30×z(HD_xGA/gp) + 0.20×z(SOGA/gp)
+    </div>
+    <p>
+      These z-scores are then scaled by <code>0.10</code> before being blended in — keeping them from
+      dominating the model when sample sizes are still small.
+    </p>
+    <div class="callout tip">
+      <strong>Why use xGoals instead of actual goals?</strong>
+      Actual goal scoring has a lot of randomness (goalie hot streaks, lucky bounces, etc.).
+      Expected goals strips that out and gives a cleaner picture of a team's underlying performance.
+      Teams that consistently generate high-danger chances tend to regress toward those numbers over time.
+    </div>
+  </section>
+
+  <!-- Goalie Ratings -->
+  <section id="goalies">
+    <h2>Goalie Ratings (GSAx)</h2>
+    <p>
+      Goalies are adjusted using <strong>Goals Saved Above Expected (GSAx)</strong> — the most reliable
+      goalie performance metric available. It measures how many goals a goalie prevented compared to
+      what an average goalie would have allowed given the same shots.
+    </p>
+    <div class="math">
+GSAx = xGoals_faced − actual_goals_allowed
+
+GSAx_per_game = GSAx / games_played
+    </div>
+    <p>
+      A positive GSAx/G means the goalie is outperforming expectations. The model converts this to a
+      log-scale adjustment and applies it to the opposing team's lambda:
+    </p>
+    <div class="math">
+log_adjustment = clip(GSAx_per_game, −0.40, +0.40) × 0.33
+
+λ_home = exp( ... − away_goalie_log_adj )   ← good away goalie reduces home scoring
+λ_away = exp( ... − home_goalie_log_adj )   ← good home goalie reduces away scoring
+    </div>
+    <p>
+      The <code>0.33</code> scaling factor and <code>±0.40</code> clipping prevent extreme goalie ratings
+      from overwhelming team-level ratings. It treats goalie impact as real but bounded.
+    </p>
+    <div class="callout warn">
+      <strong>Minimum games threshold</strong>
+      Only goalies with 5+ games played are included in ratings. Below that, the sample is too small
+      to distinguish skill from luck.
+    </div>
+  </section>
+
+  <!-- B2B -->
+  <section id="b2b">
+    <h2>Back-to-Back Penalty</h2>
+    <p>
+      When a team played a game the previous day, they take a performance hit from fatigue. The model
+      applies a flat penalty to their expected goals:
+    </p>
+    <div class="math">
+B2B_PENALTY = −0.04  (log scale)
+
+if team is on B2B:
+    λ_team *= exp(−0.04) ≈ λ_team × 0.961
+    </div>
+    <p>
+      A 4% reduction in expected goals on a back-to-back. The app auto-detects B2B situations from
+      the schedule file and pre-checks those boxes, but you can always override manually.
+    </p>
+    <div class="callout info">
+      <strong>Why log scale for the penalty too?</strong>
+      Same reason as the ratings — multiplying by <code>exp(-0.04)</code> on the lambda is equivalent
+      to subtracting 0.04 on the log scale. It keeps all the math consistent.
+    </div>
+  </section>
+
+  <!-- American Odds -->
+  <section id="american-odds">
+    <h2>American Odds → Implied Probability</h2>
+    <p>
+      American odds come in two flavors — <strong>negative</strong> (favorites) and <strong>positive</strong> (underdogs).
+      Converting them to implied probability is straightforward:
+    </p>
+    <div class="math">
+Negative odds (e.g. −150):   prob = 150 / (150 + 100) = 60.0%
+Positive odds (e.g. +130):   prob = 100 / (130 + 100) = 43.5%
+    </div>
+    <p>
+      Notice that 60.0% + 43.5% = 103.5%. That extra 3.5% is the <strong>vig</strong> — the sportsbook's cut.
+    </p>
+    <pre><code><span class="k">def</span> <span class="f">_american_to_prob</span><span class="p">(</span><span class="v">odds</span><span class="p">):</span>
+    <span class="v">odds</span> <span class="p">=</span> <span class="f">float</span><span class="p">(</span><span class="v">odds</span><span class="p">)</span>
+    <span class="k">if</span> <span class="v">odds</span> <span class="p">&gt;</span> <span class="n">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">100</span> <span class="p">/ (</span><span class="v">odds</span> <span class="p">+</span> <span class="n">100</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="f">abs</span><span class="p">(</span><span class="v">odds</span><span class="p">) / (</span><span class="f">abs</span><span class="p">(</span><span class="v">odds</span><span class="p">) +</span> <span class="n">100</span><span class="p">)</span></code></pre>
+  </section>
+
+  <!-- Vig -->
+  <section id="vig">
+    <h2>Removing the Vig</h2>
+    <p>
+      Before comparing model probabilities to market probabilities, the app removes the sportsbook's margin
+      to get the <strong>fair (vig-free) probability</strong>. If it didn't do this, it would be comparing
+      apples to oranges — the model outputs true probabilities, but raw implied odds include the book's cut.
+    </p>
+    <div class="math">
+raw_home = _american_to_prob(home_ml)   → e.g. 0.600
+raw_away = _american_to_prob(away_ml)   → e.g. 0.435
+
+total = 0.600 + 0.435 = 1.035          ← the vig
+
+fair_home = 0.600 / 1.035 = 57.97%
+fair_away = 0.435 / 1.035 = 42.03%
+    </div>
+    <p>
+      Now <code>fair_home + fair_away = 100%</code>. These are the probabilities the market is
+      actually implying after stripping out the juice.
+    </p>
+    <pre><code><span class="k">def</span> <span class="f">vig_free</span><span class="p">(</span><span class="v">ml_a</span><span class="p">, </span><span class="v">ml_b</span><span class="p">):</span>
+    <span class="v">a</span> <span class="p">=</span> <span class="f">_american_to_prob</span><span class="p">(</span><span class="v">ml_a</span><span class="p">); </span><span class="v">b</span> <span class="p">=</span> <span class="f">_american_to_prob</span><span class="p">(</span><span class="v">ml_b</span><span class="p">)</span>
+    <span class="v">tot</span> <span class="p">= (</span><span class="v">a</span> <span class="k">or</span> <span class="n">0</span><span class="p">) + (</span><span class="v">b</span> <span class="k">or</span> <span class="n">0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="v">a</span><span class="p">/</span><span class="v">tot</span> <span class="k">if</span> <span class="v">tot</span> <span class="k">else</span> <span class="k">None</span><span class="p">), (</span><span class="v">b</span><span class="p">/</span><span class="v">tot</span> <span class="k">if</span> <span class="v">tot</span> <span class="k">else</span> <span class="k">None</span><span class="p">)</span></code></pre>
+  </section>
+
+  <!-- Edge -->
+  <section id="edge">
+    <h2>Edge Calculation</h2>
+    <p>
+      Edge is simple once you have both numbers:
+    </p>
+    <div class="math">
+edge = model_probability − fair_market_probability
+    </div>
+    <p>
+      The app calculates edge for both home and away, then shows the side with the <strong>better edge</strong>.
+    </p>
+    <table>
+      <thead><tr><th>Edge</th><th>Color</th><th>Interpretation</th></tr></thead>
+      <tbody>
+        <tr><td>≥ +5%</td><td style="color:var(--green)">■ Dark green</td><td>Strong edge — model strongly disagrees with the market</td></tr>
+        <tr><td>+2% to +5%</td><td style="color:#7bc47f">■ Light green</td><td>Moderate edge</td></tr>
+        <tr><td>0% to +2%</td><td style="color:#c8e6c9">■ Pale green</td><td>Slight edge — proceed with caution</td></tr>
+        <tr><td>−3% to 0%</td><td style="color:#e57373">■ Light red</td><td>Slight fade — market has slight edge over model</td></tr>
+        <tr><td>&lt; −3%</td><td style="color:var(--red)">■ Dark red</td><td>Strong fade — avoid this side</td></tr>
+      </tbody>
+    </table>
+    <div class="callout warn">
+      <strong>Edge ≠ guaranteed profit</strong>
+      A +5% edge means you expect to profit 5 cents per dollar bet over a large sample. Any individual
+      game can still go either way. The model is trying to identify long-run value, not predict single outcomes.
+    </div>
+  </section>
+
+  <!-- App Flow -->
+  <section id="app-flow">
+    <h2>App Flow</h2>
+    <ol>
+      <li><strong>Date picker</strong> — defaults to today (Eastern Time). Pulls matching games from the schedule CSV.</li>
+      <li><strong>B2B detection</strong> — checks which teams also played yesterday and auto-flags them.</li>
+      <li><strong>Lines tab</strong> — enter home/away moneyline odds and select starting goalies.</li>
+      <li><strong>Totals tab</strong> — enter the O/U line and over/under odds.</li>
+      <li><strong>Run Predictions</strong> — model predicts expected goals → score matrix → probabilities → edge vs. market.</li>
+      <li><strong>Results</strong> — two tabs (Moneyline, Totals) sorted by edge, color-coded.</li>
+    </ol>
+  </section>
+
+  <!-- Key Files -->
+  <section id="key-files">
+    <h2>Key Files Reference</h2>
+    <table>
+      <thead><tr><th>File</th><th>Purpose</th><th>When to touch it</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>nhl_model.py</code></td>
+          <td>All model math, training, prediction</td>
+          <td>Changing how ratings are calculated, adding new features</td>
+        </tr>
+        <tr>
+          <td><code>nhl_app.py</code></td>
+          <td>Streamlit UI, form inputs, results display</td>
+          <td>UI changes, layout, adding new bet types</td>
+        </tr>
+        <tr>
+          <td><code>nhl_skellam_model.json</code></td>
+          <td>Saved trained model</td>
+          <td>Never edit directly — always regenerate from notebook</td>
+        </tr>
+        <tr>
+          <td><code>nhl-202526-asplayed.csv</code></td>
+          <td>Schedule + played games</td>
+          <td>Update regularly so today's games appear</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- Future Improvements -->
+  <section id="improvements">
+    <h2>Future Improvements</h2>
+    <div class="card-grid">
+      <div class="card">
+        <h4>🔌 Odds API Integration</h4>
+        <p>Pull live odds automatically instead of typing them in. Eliminates manual entry and enables real-time scanning across all games.</p>
+      </div>
+      <div class="card">
+        <h4>📈 Kelly Criterion</h4>
+        <p>Given an edge and your bankroll, calculate the optimal bet size using the Kelly formula instead of flat betting.</p>
+      </div>
+      <div class="card">
+        <h4>🧊 Puck Line Revival</h4>
+        <p>Puck line inputs removed for now but the model already calculates <code>home_pl_prob</code>. Easy to re-add once odds API is wired up.</p>
+      </div>
+      <div class="card">
+        <h4>📊 Bet Tracking</h4>
+        <p>Log bets you actually place and track realized edge vs. expected edge over time to validate the model.</p>
+      </div>
+      <div class="card">
+        <h4>🔄 Auto Schedule Updates</h4>
+        <p>Currently the schedule CSV needs manual updating. Could automate this with a daily pull from the NHL API.</p>
+      </div>
+      <div class="card">
+        <h4>🏒 Lineup Adjustments</h4>
+        <p>Account for key forward/defenseman injuries. Right now only goalie quality is modeled — missing skater adjustments is a known gap.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+</div>
+</body>
+</html>
