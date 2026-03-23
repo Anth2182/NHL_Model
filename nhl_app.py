@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import streamlit as st
 import pandas as pd
 import numpy as np
-from datetime import date, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from nhl_model import (
@@ -119,7 +119,7 @@ st.title("NHL Edge Finder")
 # Date picker
 col_date, col_info = st.columns([2, 3])
 with col_date:
-    selected_date = st.date_input("Game Date", value=date.today(ZoneInfo("America/New_York")), label_visibility="collapsed")
+    selected_date = st.date_input("Game Date", value=datetime.now(ZoneInfo("America/New_York")).date(), label_visibility="collapsed")
 
 prev_day  = selected_date - timedelta(days=1)
 b2b_teams = set(
@@ -144,85 +144,78 @@ st.divider()
 
 # ── Game input form ────────────────────────────────────────────────────────────
 
-st.subheader("Enter Odds & Goalies")
-st.caption("Teams and B2B flags are auto-detected. Fill in what you have — blank fields are skipped.")
-
 with st.form("predictions_form"):
     game_inputs = {}
+    ml_data  = {}
+    tot_data = {}
 
-    for _, game in day_games.iterrows():
-        home = game['home_abbr']
-        away = game['visitor_abbr']
-        key  = f"{home} vs {away}"
-        h_b2b_auto = home in b2b_teams
-        a_b2b_auto = away in b2b_teams
+    tab_lines, tab_totals = st.tabs(["📊 Lines", "🎯 Totals"])
 
-        csv_hg = game.get('Home Goalie', '')
-        csv_ag = game.get('Visitor Goalie', '')
-        csv_hg = csv_hg if pd.notna(csv_hg) and csv_hg != '' else ''
-        csv_ag = csv_ag if pd.notna(csv_ag) and csv_ag != '' else ''
+    with tab_lines:
+        hdr = st.columns([2, 1.2, 1.2, 2.2, 2.2, 0.9])
+        for col, label in zip(hdr, ["Matchup", "Home ML", "Away ML", "Home Goalie", "Away Goalie", "B2B"]):
+            col.markdown(f"**{label}**")
+        st.divider()
 
-        b2b_badge = ""
-        if h_b2b_auto: b2b_badge += f"  `{home} B2B`"
-        if a_b2b_auto: b2b_badge += f"  `{away} B2B`"
+        for _, game in day_games.iterrows():
+            home = game['home_abbr']
+            away = game['visitor_abbr']
+            key  = f"{home} vs {away}"
+            h_b2b_auto = home in b2b_teams
+            a_b2b_auto = away in b2b_teams
 
-        with st.expander(f"**{home}** vs **{away}**{b2b_badge}", expanded=True):
-            c_ml, c_pl, c_tot, c_goalies, c_b2b = st.columns([2.5, 2.5, 3, 3, 1])
+            csv_hg = game.get('Home Goalie', '')
+            csv_ag = game.get('Visitor Goalie', '')
+            csv_hg = csv_hg if pd.notna(csv_hg) and csv_hg != '' else ''
+            csv_ag = csv_ag if pd.notna(csv_ag) and csv_ag != '' else ''
 
-            with c_ml:
-                st.markdown("**Moneyline**")
-                home_ml = _parse_odds(st.text_input(f"{home} ML", key=f"{key}_hml", placeholder="-150"))
-                away_ml = _parse_odds(st.text_input(f"{away} ML", key=f"{key}_aml", placeholder="+130"))
+            b2b_flag = " 🔄" if (h_b2b_auto or a_b2b_auto) else ""
+            cols = st.columns([2, 1.2, 1.2, 2.2, 2.2, 0.9])
+            cols[0].markdown(f"**{home}** vs **{away}**{b2b_flag}")
+            home_ml = _parse_odds(cols[1].text_input("Home ML", key=f"{key}_hml", placeholder="-150", label_visibility="collapsed"))
+            away_ml = _parse_odds(cols[2].text_input("Away ML", key=f"{key}_aml", placeholder="+130", label_visibility="collapsed"))
 
-            with c_pl:
-                st.markdown("**Puck Line ±1.5**")
-                home_pl = _parse_odds(st.text_input(f"{home} -1.5", key=f"{key}_hpl", placeholder="-110"))
-                away_pl = _parse_odds(st.text_input(f"{away} +1.5", key=f"{key}_apl", placeholder="-110"))
+            h_opts = [''] + team_goalies.get(home, [])
+            h_idx  = h_opts.index(csv_hg) if csv_hg in h_opts else 0
+            home_goalie = cols[3].selectbox("Home Goalie", h_opts, index=h_idx, key=f"{key}_hg", label_visibility="collapsed") or None
 
-            with c_tot:
-                st.markdown("**Totals**")
-                tc1, tc2, tc3 = st.columns(3)
-                with tc1:
-                    ou_line = st.number_input("O/U", key=f"{key}_ou",
-                                              value=None, placeholder="5.5",
-                                              min_value=0.5, max_value=15.0, step=0.5)
-                with tc2:
-                    over_odds = _parse_odds(st.text_input("Over", key=f"{key}_over", placeholder="-110"))
-                with tc3:
-                    under_odds = _parse_odds(st.text_input("Under", key=f"{key}_under", placeholder="-110"))
+            a_opts = [''] + team_goalies.get(away, [])
+            a_idx  = a_opts.index(csv_ag) if csv_ag in a_opts else 0
+            away_goalie = cols[4].selectbox("Away Goalie", a_opts, index=a_idx, key=f"{key}_ag", label_visibility="collapsed") or None
 
-            with c_goalies:
-                st.markdown("**Goalies**")
-                h_opts = [''] + team_goalies.get(home, [])
-                h_idx  = h_opts.index(csv_hg) if csv_hg in h_opts else 0
-                h_sel  = st.selectbox(f"{home} Goalie", h_opts, index=h_idx, key=f"{key}_hg_sel")
-                h_ovr  = st.text_input("", key=f"{key}_hg_txt",
-                                       placeholder="Override (trade / injury)",
-                                       label_visibility="collapsed")
-                home_goalie = h_ovr.strip() or h_sel or None
+            with cols[5]:
+                h_b2b = st.checkbox(home[:3], key=f"{key}_hb2b", value=h_b2b_auto)
+                a_b2b = st.checkbox(away[:3], key=f"{key}_ab2b", value=a_b2b_auto)
 
-                a_opts = [''] + team_goalies.get(away, [])
-                a_idx  = a_opts.index(csv_ag) if csv_ag in a_opts else 0
-                a_sel  = st.selectbox(f"{away} Goalie", a_opts, index=a_idx, key=f"{key}_ag_sel")
-                a_ovr  = st.text_input("", key=f"{key}_ag_txt",
-                                       placeholder="Override (trade / injury)",
-                                       label_visibility="collapsed")
-                away_goalie = a_ovr.strip() or a_sel or None
-
-            with c_b2b:
-                st.markdown("**B2B**")
-                h_b2b = st.checkbox(home, key=f"{key}_hb2b", value=h_b2b_auto)
-                a_b2b = st.checkbox(away, key=f"{key}_ab2b", value=a_b2b_auto)
-
-            game_inputs[key] = {
+            ml_data[key] = {
                 'home': home, 'away': away,
                 'home_ml': home_ml, 'away_ml': away_ml,
-                'home_pl': home_pl, 'away_pl': away_pl,
-                'ou_line': ou_line, 'over': over_odds, 'under': under_odds,
-                'home_goalie': home_goalie,
-                'away_goalie': away_goalie,
+                'home_goalie': home_goalie, 'away_goalie': away_goalie,
                 'home_b2b': h_b2b, 'away_b2b': a_b2b,
             }
+
+    with tab_totals:
+        hdr = st.columns([2, 1.5, 1.5, 1.5])
+        for col, label in zip(hdr, ["Matchup", "O/U Line", "Over Odds", "Under Odds"]):
+            col.markdown(f"**{label}**")
+        st.divider()
+
+        for _, game in day_games.iterrows():
+            home = game['home_abbr']
+            away = game['visitor_abbr']
+            key  = f"{home} vs {away}"
+
+            cols = st.columns([2, 1.5, 1.5, 1.5])
+            cols[0].markdown(f"**{home}** vs **{away}**")
+            ou_line    = cols[1].number_input("O/U", key=f"{key}_ou", value=None, placeholder="5.5",
+                                              min_value=0.5, max_value=15.0, step=0.5, label_visibility="collapsed")
+            over_odds  = _parse_odds(cols[2].text_input("Over",  key=f"{key}_over",  placeholder="-110", label_visibility="collapsed"))
+            under_odds = _parse_odds(cols[3].text_input("Under", key=f"{key}_under", placeholder="-110", label_visibility="collapsed"))
+
+            tot_data[key] = {'ou_line': ou_line, 'over': over_odds, 'under': under_odds}
+
+    for key, data in ml_data.items():
+        game_inputs[key] = {**data, **tot_data.get(key, {'ou_line': None, 'over': None, 'under': None})}
 
     submitted = st.form_submit_button(
         "Run Predictions",
@@ -254,7 +247,27 @@ if submitted:
     st.divider()
     st.subheader(f"Predictions — {selected_date.strftime('%B %d, %Y')}")
 
-    ml_rows = []; pl_rows = []; tot_rows = []
+    ml_rows = []; tot_rows = []
+
+    def vig_free(ml_a, ml_b):
+        a = _american_to_prob(ml_a); b = _american_to_prob(ml_b)
+        tot = (a or 0) + (b or 0)
+        return (a/tot if tot else None), (b/tot if tot else None)
+
+    def best_edge(model_h, model_a, fair_h, fair_a, label_h, label_a):
+        eh = round(model_h - fair_h, 4) if fair_h else None
+        ea = round(model_a - fair_a, 4) if fair_a else None
+        if eh is None and ea is None: return '—', None
+        if eh is None: return label_a, ea
+        if ea is None: return label_h, eh
+        return (label_h, eh) if eh >= ea else (label_a, ea)
+
+    def fmt(v, pct=True):
+        if v is None: return '—'
+        return f"{v:.1%}" if pct else str(v)
+
+    def fmt_edge(e):
+        return f"{e:+.1%}" if e is not None else '—'
 
     for key, info in game_inputs.items():
         home = info['home']; away = info['away']
@@ -265,26 +278,6 @@ if submitted:
                           home_goalie=hg, away_goalie=ag,
                           home_b2b=info['home_b2b'], away_b2b=info['away_b2b'],
                           ou_line=ou)
-
-        def vig_free(ml_a, ml_b):
-            a = _american_to_prob(ml_a); b = _american_to_prob(ml_b)
-            tot = (a or 0) + (b or 0)
-            return (a/tot if tot else None), (b/tot if tot else None)
-
-        def best_edge(model_h, model_a, fair_h, fair_a, label_h, label_a):
-            eh = round(model_h - fair_h, 4) if fair_h else None
-            ea = round(model_a - fair_a, 4) if fair_a else None
-            if eh is None and ea is None: return '—', None
-            if eh is None: return label_a, ea
-            if ea is None: return label_h, eh
-            return (label_h, eh) if eh >= ea else (label_a, ea)
-
-        def fmt(v, pct=True):
-            if v is None: return '—'
-            return f"{v:.1%}" if pct else str(v)
-
-        def fmt_edge(e):
-            return f"{e:+.1%}" if e is not None else '—'
 
         goalie_str = f"{hg or '—'} / {ag or '—'}"
         b2b_str    = ' '.join(filter(None, [
@@ -311,26 +304,6 @@ if submitted:
             'Best Side':  side,
             'Edge':       fmt_edge(edge_val),
             '_edge_num':  edge_val if edge_val is not None else -99,
-        })
-
-        # Puck line
-        fair_hpl, fair_apl = vig_free(info['home_pl'], info['away_pl'])
-        pl_side, pl_edge = best_edge(p['home_pl_prob'], p['away_pl_prob'],
-                                     fair_hpl, fair_apl,
-                                     f"{home} -1.5", f"{away} +1.5")
-        pl_rows.append({
-            'Matchup':       key,
-            'Model H -1.5%': fmt(p['home_pl_prob']),
-            'Model A +1.5%': fmt(p['away_pl_prob']),
-            'Fair H -1.5%':  fmt(fair_hpl),
-            'Fair A +1.5%':  fmt(fair_apl),
-            'Home PL':       info['home_pl'] if info['home_pl'] else '—',
-            'Away PL':       info['away_pl'] if info['away_pl'] else '—',
-            'Goalies':       goalie_str,
-            'B2B':           b2b_str,
-            'Best Side':     pl_side,
-            'Edge':          fmt_edge(pl_edge),
-            '_edge_num':     pl_edge if pl_edge is not None else -99,
         })
 
         # Totals
@@ -360,13 +333,10 @@ if submitted:
         df = pd.DataFrame(rows).sort_values('_edge_num', ascending=False)
         return df.drop(columns=['_edge_num']).reset_index(drop=True)
 
-    tab_ml, tab_pl, tab_tot = st.tabs(["Moneyline", "Puck Line", "Totals"])
+    tab_ml, tab_tot = st.tabs(["Moneyline", "Totals"])
 
     with tab_ml:
         show_table(to_df(ml_rows))
-
-    with tab_pl:
-        show_table(to_df(pl_rows))
 
     with tab_tot:
         show_table(to_df(tot_rows))
