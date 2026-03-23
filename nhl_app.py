@@ -11,6 +11,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import date, timedelta
+from zoneinfo import ZoneInfo
 
 from nhl_model import (
     NHLPoissonModel, load_schedule, _american_to_prob,
@@ -118,7 +119,7 @@ st.title("NHL Edge Finder")
 # Date picker
 col_date, col_info = st.columns([2, 3])
 with col_date:
-    selected_date = st.date_input("Game Date", value=date.today(), label_visibility="collapsed")
+    selected_date = st.date_input("Game Date", value=date.today(ZoneInfo("America/New_York")), label_visibility="collapsed")
 
 prev_day  = selected_date - timedelta(days=1)
 b2b_teams = set(
