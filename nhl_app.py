@@ -17,6 +17,14 @@ from nhl_model import (
     MODEL_PATH, SCHEDULE_CSV
 )
 
+def _parse_odds(s):
+    """Parse a text odds input like '-123' or '+110' to int, or None if blank/invalid."""
+    if s is None: return None
+    s = str(s).strip()
+    if not s: return None
+    try: return int(s)
+    except ValueError: return None
+
 # ── Page config ────────────────────────────────────────────────────────────────
 
 st.set_page_config(
@@ -32,6 +40,17 @@ st.markdown("""
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .stTabs [data-baseweb="tab"] { padding: 6px 16px; }
 </style>
+<script>
+    // Force full keyboard on mobile so the minus sign (-) is available for odds input
+    const _fixInputMode = () => {
+        document.querySelectorAll('input[type="text"], input:not([type])').forEach(el => {
+            el.setAttribute('inputmode', 'text');
+        });
+    };
+    const _observer = new MutationObserver(_fixInputMode);
+    _observer.observe(document.body, { childList: true, subtree: true });
+    _fixInputMode();
+</script>
 """, unsafe_allow_html=True)
 
 # ── Load model + schedule (cached) ────────────────────────────────────────────
@@ -151,21 +170,13 @@ with st.form("predictions_form"):
 
             with c_ml:
                 st.markdown("**Moneyline**")
-                home_ml = st.number_input(f"{home} ML", key=f"{key}_hml",
-                                          value=None, placeholder="-150",
-                                          min_value=-5000, max_value=5000, step=5)
-                away_ml = st.number_input(f"{away} ML", key=f"{key}_aml",
-                                          value=None, placeholder="+130",
-                                          min_value=-5000, max_value=5000, step=5)
+                home_ml = _parse_odds(st.text_input(f"{home} ML", key=f"{key}_hml", placeholder="-150"))
+                away_ml = _parse_odds(st.text_input(f"{away} ML", key=f"{key}_aml", placeholder="+130"))
 
             with c_pl:
                 st.markdown("**Puck Line ±1.5**")
-                home_pl = st.number_input(f"{home} -1.5", key=f"{key}_hpl",
-                                          value=None, placeholder="-110",
-                                          min_value=-5000, max_value=5000, step=5)
-                away_pl = st.number_input(f"{away} +1.5", key=f"{key}_apl",
-                                          value=None, placeholder="-110",
-                                          min_value=-5000, max_value=5000, step=5)
+                home_pl = _parse_odds(st.text_input(f"{home} -1.5", key=f"{key}_hpl", placeholder="-110"))
+                away_pl = _parse_odds(st.text_input(f"{away} +1.5", key=f"{key}_apl", placeholder="-110"))
 
             with c_tot:
                 st.markdown("**Totals**")
@@ -175,13 +186,9 @@ with st.form("predictions_form"):
                                               value=None, placeholder="5.5",
                                               min_value=0.5, max_value=15.0, step=0.5)
                 with tc2:
-                    over_odds = st.number_input("Over", key=f"{key}_over",
-                                                value=None, placeholder="-110",
-                                                min_value=-5000, max_value=5000, step=5)
+                    over_odds = _parse_odds(st.text_input("Over", key=f"{key}_over", placeholder="-110"))
                 with tc3:
-                    under_odds = st.number_input("Under", key=f"{key}_under",
-                                                 value=None, placeholder="-110",
-                                                 min_value=-5000, max_value=5000, step=5)
+                    under_odds = _parse_odds(st.text_input("Under", key=f"{key}_under", placeholder="-110"))
 
             with c_goalies:
                 st.markdown("**Goalies**")
